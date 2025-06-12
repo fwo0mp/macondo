@@ -15,18 +15,23 @@ import (
 )
 
 var exports = map[string]lua.LGFunction{
-	"load":       load,
-	"set":        set,
-	"gen":        gen,
-	"add":        add,
-	"sim":        sim,
-	"turn":       turn,
-	"gid":        gid,
-	"endgame":    endgame,
-	"busy":       busy,
-	"elite_play": elitePlay,
-	"last":       last,
-	"gamestate":  gamestate,
+	"new":          newGame,
+	"load":         load,
+	"set":          set,
+	"gen":          gen,
+	"add":          add,
+	"sim":          sim,
+	"turn":         turn,
+	"commit":       commit,
+	"gid":          gid,
+	"endgame":      endgame,
+	"busy":         busy,
+	"commit_ai":    commitAIMove,
+	"commit_hasty": commitHastyMove,
+	"elite_play":   elitePlay,
+	"last":         last,
+	"gamestate":    gamestate,
+	"cgp":          getCgp,
 }
 
 func getShell(L *lua.LState) *ShellController {
@@ -176,9 +181,23 @@ func elitePlay(L *lua.LState) int {
 		log.Err(err).Msg("error with eliteplay")
 		return 0
 	}
-	L.Push(lua.LString(sc.game.Board().MoveDescriptionWithPlaythrough(m)))
+	//L.Push(lua.LString(sc.game.Board().MoveDescriptionWithPlaythrough(m)))
+	// XXX make output format configurable
+	L.Push(lua.LString(m.ShortDescription()))
 	L.Push(lua.LString(sc.elitebot.BestPlayDetails(sc.botCtx)))
 	return 2
+}
+
+func commitHastyMove(L *lua.LState) int {
+	sc := getShell(L)
+	sc.hastyplay(nil)
+	return 1
+}
+
+func commitAIMove(L *lua.LState) int {
+	sc := getShell(L)
+	sc.eliteplay(nil)
+	return 1
 }
 
 func endgame(L *lua.LState) int {
@@ -221,6 +240,52 @@ func sim(L *lua.LState) int {
 func busy(L *lua.LState) int {
 	sc := getShell(L)
 	L.Push(lua.LBool(sc.solving()))
+	return 1
+}
+
+func newGame(L *lua.LState) int {
+	lv := L.ToString(1)
+	sc := getShell(L)
+	_, err := sc.newGame(&shellcmd{
+		cmd:  "new",
+		args: strings.Split(lv, " "),
+	})
+	if err != nil {
+		log.Err(err).Msg("error-executing-new")
+		L.Push(lua.LString("ERROR: " + err.Error()))
+		return 1
+	}
+	return 1
+}
+
+func commit(L *lua.LState) int {
+	lv := L.ToString(1)
+	sc := getShell(L)
+	_, err := sc.commit(&shellcmd{
+		cmd:  "commit",
+		args: strings.Split(lv, " "),
+	})
+	if err != nil {
+		log.Err(err).Msg("error-executing-commit")
+		L.Push(lua.LString("ERROR: " + err.Error()))
+		return 1
+	}
+	return 1
+}
+
+func getCgp(L *lua.LState) int {
+	lv := L.ToString(1)
+	sc := getShell(L)
+	r, err := sc.cgp(&shellcmd{
+		cmd:  "cgp",
+		args: strings.Split(lv, " "),
+	})
+	if err != nil {
+		log.Err(err).Msg("error-executing-cgp")
+		L.Push(lua.LString("ERROR: " + err.Error()))
+		return 1
+	}
+	L.Push(lua.LString(r.message))
 	return 1
 }
 
