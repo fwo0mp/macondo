@@ -379,7 +379,17 @@ func (sc *ShellController) generate(cmd *shellcmd) (*Response, error) {
 			return nil, err
 		}
 	}
-	return msg(sc.genMovesAndDescription(numPlays, true)), nil
+	fullData := true
+	if len(cmd.args) > 1 {
+		if cmd.args[1] == "simple" {
+			fullData = false
+		} else if cmd.args[1] == "full" {
+			fullData = true
+		} else {
+			return nil, errors.New("invalid output type: " + cmd.args[1])
+		}
+	}
+	return msg(sc.genMovesAndDescription(numPlays, fullData)), nil
 }
 
 func (sc *ShellController) autoplay(cmd *shellcmd) (*Response, error) {
