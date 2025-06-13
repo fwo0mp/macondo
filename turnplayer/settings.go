@@ -34,6 +34,7 @@ type GameOptions struct {
 	ChallengeRule   pb.ChallengeRule
 	BoardLayoutName string
 	Variant         game.Variant
+	QuietMode       bool
 }
 
 func (opts *GameOptions) SetDefaults(cfg *config.Config) {
@@ -48,6 +49,7 @@ func (opts *GameOptions) SetDefaults(cfg *config.Config) {
 	if opts.Variant == "" {
 		opts.Variant = game.VarClassic
 	}
+	opts.QuietMode = cfg.GetBool(config.ConfigQuiet)
 }
 
 func (opts *GameOptions) SetLexicon(fields []string, cfg *wglconfig.Config) error {

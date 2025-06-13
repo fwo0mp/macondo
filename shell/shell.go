@@ -92,6 +92,9 @@ func (opts *ShellOptions) Show(key string) (bool, string) {
 }
 
 func (opts *ShellOptions) ToDisplayText() string {
+	if opts.QuietMode {
+		return ""
+	}
 	keys := []string{"lexicon", "challenge", "lower", "board"}
 	out := strings.Builder{}
 	out.WriteString("Settings:\n")
@@ -201,12 +204,16 @@ func (sc *ShellController) showError(err error) {
 }
 
 func NewShellController(cfg *config.Config, execPath, gitVersion string) *ShellController {
-	prompt := "macondo>"
-	if os.Getenv("NO_COLOR") == "" {
-		prompt = fmt.Sprintf("\033[31m%s\033[0m", prompt)
+	prompt := ""
+	if !cfg.GetBool(config.ConfigQuiet) {
+		prompt = "macondo>"
+		if os.Getenv("NO_COLOR") == "" {
+			prompt = fmt.Sprintf("\033[31m%s\033[0m", prompt)
+		}
+		prompt = prompt + " "
 	}
 	l, err := readline.NewEx(&readline.Config{
-		Prompt:          prompt + " ",
+		Prompt:          prompt,
 		HistoryFile:     "/tmp/readline.tmp",
 		EOFPrompt:       "exit",
 		InterruptPrompt: "^C",
@@ -552,20 +559,26 @@ func (sc *ShellController) printEndgameSequence(moves []*move.Move) {
 	}
 }
 
-func (sc *ShellController) genMovesAndDescription(numPlays int) string {
+func (sc *ShellController) genMovesAndDescription(numPlays int, fullData bool) string {
 	sc.genMoves(numPlays)
-	return sc.genDisplayMoveList()
+	return sc.genDisplayMoveList(fullData)
 }
 
 func (sc *ShellController) genMoves(numPlays int) {
 	sc.curPlayList = sc.game.GenerateMoves(numPlays)
 }
 
-func (sc *ShellController) genDisplayMoveList() string {
+func (sc *ShellController) genDisplayMoveList(fullData bool) string {
 	var s strings.Builder
-	s.WriteString(moveTableHeader() + "\n")
+	if fullData {
+		s.WriteString(moveTableHeader() + "\n")
+	}
 	for i, p := range sc.curPlayList {
-		s.WriteString(MoveTableRow(i, p, sc.game.Alphabet()) + "\n")
+		if fullData {
+			s.WriteString(MoveTableRow(i, p, sc.game.Alphabet()) + "\n")
+		} else {
+			s.WriteString(p.ShortDescription() + "\n")
+		}
 	}
 	return s.String()
 }
@@ -608,7 +621,7 @@ func (sc *ShellController) addMoveToList(playerid int, m *move.Move) error {
 	sort.Slice(sc.curPlayList, func(i, j int) bool {
 		return sc.curPlayList[j].Equity() < sc.curPlayList[i].Equity()
 	})
-	sc.showMessage(sc.genDisplayMoveList())
+	sc.showMessage(sc.genDisplayMoveList(true))
 	return nil
 }
 

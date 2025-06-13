@@ -83,7 +83,8 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	argsLine := strings.Join(args, " ")
+	nonFlagArgs := fs.Args()
+	argsLine := strings.Join(nonFlagArgs, " ")
 	argsLineTrimmed := strings.TrimSpace(argsLine)
 
 	sc := shell.NewShellController(cfg, exPath, GitVersion)

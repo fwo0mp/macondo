@@ -187,7 +187,7 @@ func (sc *ShellController) show(cmd *shellcmd) (*Response, error) {
 }
 
 func (sc *ShellController) list(cmd *shellcmd) (*Response, error) {
-	res := sc.genDisplayMoveList()
+	res := sc.genDisplayMoveList(true)
 	return msg(res), nil
 }
 
@@ -379,7 +379,7 @@ func (sc *ShellController) generate(cmd *shellcmd) (*Response, error) {
 			return nil, err
 		}
 	}
-	return msg(sc.genMovesAndDescription(numPlays)), nil
+	return msg(sc.genMovesAndDescription(numPlays, true)), nil
 }
 
 func (sc *ShellController) autoplay(cmd *shellcmd) (*Response, error) {

@@ -16,6 +16,7 @@ import (
 // Known config names
 const (
 	ConfigDebug                     string = "debug"
+	ConfigQuiet                            = "quiet"
 	ConfigKWGPathPrefix                    = "kwg-path-prefix"
 	ConfigDataPath                         = "data-path"
 	ConfigDefaultLexicon                   = "default-lexicon"
@@ -77,6 +78,7 @@ func (c *Config) Load(args []string) error {
 	c.BindEnv(ConfigNatsURL)
 	c.BindEnv(ConfigWolgesAwsmUrl)
 	c.BindEnv(ConfigDebug)
+	c.BindEnv(ConfigQuiet)
 	c.BindEnv(ConfigKWGPathPrefix)
 	c.BindEnv(ConfigCPUProfile)
 	c.BindEnv(ConfigMEMProfile)
