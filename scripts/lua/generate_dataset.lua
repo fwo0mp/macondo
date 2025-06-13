@@ -1,56 +1,63 @@
 #!/usr/bin/env lua
 
 -- Dataset generation script for Macondo
--- Generates game states at different stages (early/mid/late) with top 100 moves
--- Usage: script scripts/lua/generate_dataset.lua <num_items> [early_ratio] [mid_ratio] [late_ratio]
+-- Generates a single game state with top 100 moves
+-- Usage: script scripts/lua/generate_dataset.lua <min_tiles> <max_tiles>
 
 local macondo = require("macondo")
 local json = require("json")
 
 -- Parse command line arguments (args is a single string, not an array)
 if not args then
-    print("Usage: script scripts/lua/generate_dataset.lua <num_items> [early_ratio] [mid_ratio] [late_ratio]")
-    print("Example: script scripts/lua/generate_dataset.lua 1000 0.33 0.33 0.34")
-    print("Generates 1000 items with even split between game stages")
+    print("Usage: script scripts/lua/generate_dataset.lua <min_tiles> <max_tiles>")
+    print("Example: script scripts/lua/generate_dataset.lua 20 50")
+    print("Generates a single game with 20-50 tiles remaining")
     print("")
     print("This script works by:")
-    print("1. Starting new games and simulating AI turns")
-    print("2. Capturing positions at target game stages")
-    print("3. Generating top 100 moves for each position")
+    print("1. Starting a new game and simulating AI turns")
+    print("2. Capturing position when tiles remaining is in target range")
+    print("3. Generating top 100 moves for the position")
+    print("4. Outputting the result to console as JSON")
     return
 end
 
-local num_items = tonumber(args[1])
-if not num_items or num_items <= 0 then
-    print("Error: num_items must be a positive number")
+-- Parse the args string to extract min_tiles and max_tiles
+local fast = false
+
+-- split args by whitespace
+local str_args = {}
+for arg in args[1]:gmatch("[^%s]+") do
+    table.insert(str_args, arg)
+end
+
+-- error if there are not at least 2 args
+if #str_args < 2 then
+    print("Error: At least 2 arguments are required")
     return
 end
 
--- Parse ratios with defaults to even split
-local early_ratio = 0.33
-local mid_ratio = 0.33
-local late_ratio = 0.34
+local min_tiles = tonumber(str_args[1])
+local max_tiles = tonumber(str_args[2])
 
--- Validate ratios
-if math.abs(early_ratio + mid_ratio + late_ratio - 1.0) > 0.001 then
-    print("Error: Ratios must sum to 1.0")
+if #str_args > 2 then
+    if str_args[3] == "fast" then
+        fast = true
+    else
+        print("Error: Invalid argument: " .. str_args[3])
+        return
+    end
+end
+
+if not min_tiles or not max_tiles then
+    print("Error: Both min_tiles and max_tiles must be numbers")
+    print("Received args: '" .. (args or "nil") .. "'")
     return
 end
 
-print("Generating " .. num_items .. " dataset items:")
-print("  Early game: " .. (early_ratio * 100) .. "%")
-print("  Mid game: " .. (mid_ratio * 100) .. "%") 
-print("  Late game: " .. (late_ratio * 100) .. "%")
-
--- Calculate items per stage
-local early_items = math.floor(num_items * early_ratio)
-local mid_items = math.floor(num_items * mid_ratio)
-local late_items = num_items - early_items - mid_items
-
--- Game stage definitions based on tiles remaining in bag
-local EARLY_GAME_MIN_TILES = 70
-local MID_GAME_MIN_TILES = 20
-local LATE_GAME_MIN_TILES = 0
+if min_tiles < 0 or max_tiles < 0 or min_tiles > max_tiles then
+    print("Error: min_tiles and max_tiles must be non-negative and min_tiles <= max_tiles")
+    return
+end
 
 -- Helper function to get tiles remaining from game state
 function get_tiles_remaining()
@@ -61,41 +68,29 @@ end
 
 -- Helper function to extract moves from gen output
 function get_generated_moves()
-    -- Generate moves and get the current game state
-    macondo.gen("100 simple")
+    local moves = macondo.gen("100 simple")
     
-    -- Parse moves from the game state output
-    local moves = {}
-    local lines = {}
-    for line in game_state:gmatch("[^\n]+") do
-        table.insert(lines, line)
+    local res = {}
+    for move in moves:gmatch("[^\n]+") do
+
+        -- Strip leading whitespace from move
+        move = move:match("^%s*(.-)$")
+
+        -- strip surrounding parens, e.g. exchanges are expressed as (exch ABC)
+        move = move:match("^%(?(.-)%)?$")
+
+        -- "pass" is output in upper case but needs to be input in lower case
+        move = move:gsub("^Pass$", "pass")
+
+        table.insert(res, move)
     end
-    
-    -- Look for move listings in the game state
-    local parsing_moves = false
-    for i, line in ipairs(lines) do
-        if line:match("Generated moves:") or line:match("Moves:") then
-            parsing_moves = true
-        elseif parsing_moves and line:match("^%s*%d+") then
-            -- Parse move line: "1. PLAY SCORE EQUITY"
-            local num, play, score, equity = line:match("^%s*(%d+)%.%s*(%S+%s*%S*)%s+(%d+)%s+([-+%d%.]+)")
-            if play and score and equity then
-                table.insert(moves, {
-                    rank = tonumber(num),
-                    play = play,
-                    score = tonumber(score),
-                    equity = tonumber(equity)
-                })
-            end
-        end
-    end
-    
-    return moves
+
+    return res
 end
 
 -- Function to simulate a game until reaching target tiles remaining
-function simulate_to_target_stage(target_min_tiles, target_max_tiles)
-    local max_attempts = 3
+function simulate_to_target_stage(target_min_tiles, target_max_tiles, fast)
+    local max_attempts = 10
     local attempt = 0
     
     while attempt < max_attempts do
@@ -105,10 +100,8 @@ function simulate_to_target_stage(target_min_tiles, target_max_tiles)
         macondo.new()
         
         -- Play AI turns until we reach the target stage
-        local tiles_remaining = 100 -- Start with full bag approximately
-        
         while true do
-            tiles_remaining = get_tiles_remaining()
+            local tiles_remaining = get_tiles_remaining()
             
             -- Check if we've reached the target stage
             if tiles_remaining >= target_min_tiles and tiles_remaining <= target_max_tiles then
@@ -125,115 +118,34 @@ function simulate_to_target_stage(target_min_tiles, target_max_tiles)
             end
             
             -- Play an AI move to advance the game
-            -- macondo.commit_ai()
-            macondo.commit_hasty()
+            if fast then
+                macondo.commit_hasty()
+            else
+                macondo.commit_ai()
+            end
         end
     end
     
     return nil, nil -- Failed to generate valid position
 end
 
--- Function to generate dataset items for a specific stage
-function generate_items_for_stage(stage_name, target_count, target_min_tiles, target_max_tiles)
-    local items = {}
-    local generated = 0
-    
-    print("Generating " .. target_count .. " " .. stage_name .. " game items...")
-    print("  Target tiles remaining: " .. target_min_tiles .. " to " .. target_max_tiles)
-    
-    while generated < target_count do
-        local tiles_remaining, cgp = simulate_to_target_stage(target_min_tiles, target_max_tiles)
-        local moves = get_generated_moves()
-        
-        local item = {
-            cgp = cgp,
-            moves = moves,
-            stage = stage_name,
-            tiles_remaining = tiles_remaining,
-            generated_at = os.time()
-        }
-        
-        table.insert(items, item)
-        -- Save this single item immediately
-        write_game_results({item})
-        
-        generated = generated + 1
-    end
-    
-    if generated < target_count then
-        print("  Warning: Only generated " .. generated .. "/" .. target_count .. " " .. stage_name .. " items")
-    end
-    
-    return items
+-- Generate single game
+local tiles_remaining, cgp = simulate_to_target_stage(min_tiles, max_tiles, fast)
+
+if not cgp then
+    print("Failed to generate game position with " .. min_tiles .. "-" .. max_tiles .. " tiles remaining")
+    return
 end
 
--- Initialize random seed
-math.randomseed(os.time())
+-- Generate moves for this position
+local moves = get_generated_moves()
 
--- Generate dataset items
-local dataset = {}
-macondo.set("lexicon NWL23")
+-- Create the result item
+local item = {
+    cgp = cgp,
+    moves = moves,
+    tiles_remaining = tiles_remaining
+}
 
--- Generate early game items (70+ tiles remaining)
-local early_items_list = generate_items_for_stage("early", early_items, EARLY_GAME_MIN_TILES, 100)
-for _, item in ipairs(early_items_list) do
-    table.insert(dataset, item)
-end
-
--- Generate mid game items (20-69 tiles remaining)
-local mid_items_list = generate_items_for_stage("mid", mid_items, MID_GAME_MIN_TILES, EARLY_GAME_MIN_TILES - 1)
-for _, item in ipairs(mid_items_list) do
-    table.insert(dataset, item)
-end
-
--- Generate late game items (0-19 tiles remaining)
-local late_items_list = generate_items_for_stage("late", late_items, LATE_GAME_MIN_TILES, MID_GAME_MIN_TILES - 1)
-for _, item in ipairs(late_items_list) do
-    table.insert(dataset, item)
-end
-
--- Save dataset to file
-function write_game_results(dataset)
-    local filename = "/Users/brendon/src/macondo/scrabble_dataset.json"
-    local file = io.open(filename, "a+") -- Open in append mode
-    if file then
-        -- If file is empty, start array, otherwise add comma first
-        file:seek("end")
-        local size = file:seek()
-        if size == 0 then
-            file:write("[\n")
-        else
-            file:seek("end", -2) -- Move before final ]
-            file:write(",\n")
-        end
-        
-        -- Write the new items
-        file:write(json.encode(dataset))
-        file:write("\n]")
-        file:close()
-        print("\nDataset appended to " .. filename)
-        print("Generated " .. #dataset .. " out of " .. num_items .. " requested items")
-    else
-        print("\nError: Could not write to file " .. filename)
-    end
-end
-
--- Print summary statistics
-local stage_counts = {early = 0, mid = 0, late = 0}
-for _, item in ipairs(dataset) do
-    stage_counts[item.stage] = stage_counts[item.stage] + 1
-end
-
-print("\nSummary:")
-print("  Early game: " .. stage_counts.early .. " items")
-print("  Mid game: " .. stage_counts.mid .. " items")
-print("  Late game: " .. stage_counts.late .. " items")
-print("  Total: " .. #dataset .. " items")
-
-print("\nDataset structure:")
-print("  Each item contains:")
-print("    - cgp: Game state in CGP format")
-print("    - moves: Array of top moves with rank, play, score, equity")
-print("    - stage: Game stage (early/mid/late)")
-print("    - tiles_remaining: Number of tiles left in bag")
-print("    - generated_at: Unix timestamp")
+-- Output the result to console as JSON
+print(json.encode(item))
