@@ -55,33 +55,14 @@ local LATE_GAME_MIN_TILES = 0
 -- Helper function to get tiles remaining from game state
 function get_tiles_remaining()
     local game_state = macondo.gamestate()
-    print(game_state)
     local unseenStr = game_state:match("(%d+) in the bag")
-    if unseenStr then
-        return tonumber(unseenStr)
-    end
-    return nil
-end
-
--- Helper function to extract CGP from gamestate output
-function extract_cgp_from_gamestate(game_state)
-    -- Look for CGP line in the game state output
-    for line in game_state:gmatch("[^\n]+") do
-        if line:match("CGP:") then
-            local cgp = line:match("CGP:%s*(.+)")
-            if cgp then
-                return cgp
-            end
-        end
-    end
-    return nil
+    return tonumber(unseenStr)
 end
 
 -- Helper function to extract moves from gen output
 function get_generated_moves()
     -- Generate moves and get the current game state
-    macondo.gen("100")
-    local game_state = macondo.gamestate()
+    macondo.gen("100 simple")
     
     -- Parse moves from the game state output
     local moves = {}
@@ -114,7 +95,7 @@ end
 
 -- Function to simulate a game until reaching target tiles remaining
 function simulate_to_target_stage(target_min_tiles, target_max_tiles)
-    local max_attempts = 100
+    local max_attempts = 3
     local attempt = 0
     
     while attempt < max_attempts do
@@ -125,21 +106,16 @@ function simulate_to_target_stage(target_min_tiles, target_max_tiles)
         
         -- Play AI turns until we reach the target stage
         local tiles_remaining = 100 -- Start with full bag approximately
-        local turn_count = 0
-        local max_turns = 200
         
-        while turn_count < max_turns do
+        while true do
             tiles_remaining = get_tiles_remaining()
-            if not tiles_remaining then
-                break -- Can't determine tiles remaining
-            end
             
             -- Check if we've reached the target stage
             if tiles_remaining >= target_min_tiles and tiles_remaining <= target_max_tiles then
                 -- We're in the target range, capture this position
-                print("reached target stage")
+                -- XXX potentially play more turns to get deeper into the stage; otherwise we'll
+                -- end up with counts clustering in the earliest part of each range
                 local cgp = macondo.cgp()
-                print("cgp = "..cgp)
                 return tiles_remaining, cgp
             end
             
@@ -148,33 +124,9 @@ function simulate_to_target_stage(target_min_tiles, target_max_tiles)
                 break -- This game won't work for our target
             end
             
-            -- Play an AI move to advance the game using elite_play
+            -- Play an AI move to advance the game
             -- macondo.commit_ai()
             macondo.commit_hasty()
-
-            -- local elite_move = macondo.elite_play()
-            -- print(elite_move)
-            
-            -- strip whitespace
-            -- elite_move = string.gsub(elite_move, "^%s*(.-)$", "%1")
-
-            -- for exchanges, the entire move is wrapped in parens
-            -- elite_move = string.gsub(elite_move, "^%((.+)%)$", "%1")
-
-            -- "pass" is output in upper case but needs to be input in lower case
-            -- elite_move = string.gsub(elite_move, "^Pass$", "pass")
-
-            -- below substitutions account for output with board context, but they would be
-            -- messy to correctly implement in lua/regex, so instead we just patched the
-            -- elite_move function to return the simplified format
-
-            -- when using existing letters, elite_play outputs them as (XYZ)
-            -- elite_move = string.gsub(elite_move, "%([A-Za-z]+%)", ".")
-
-            -- print(elite_move)
-            -- macondo.commit(elite_move)
-            
-            turn_count = turn_count + 1
         end
     end
     
@@ -185,7 +137,6 @@ end
 function generate_items_for_stage(stage_name, target_count, target_min_tiles, target_max_tiles)
     local items = {}
     local generated = 0
-    local failed_attempts = 0
     
     print("Generating " .. target_count .. " " .. stage_name .. " game items...")
     print("  Target tiles remaining: " .. target_min_tiles .. " to " .. target_max_tiles)
@@ -207,7 +158,6 @@ function generate_items_for_stage(stage_name, target_count, target_min_tiles, ta
         write_game_results({item})
         
         generated = generated + 1
-        failed_attempts = 0 -- Reset failure counter on success
     end
     
     if generated < target_count then
