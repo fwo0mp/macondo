@@ -21,16 +21,11 @@ if not args then
     return
 end
 
--- Parse the args string to extract min_tiles and max_tiles
-local fast = false
-
--- split args by whitespace
 local str_args = {}
 for arg in args[1]:gmatch("[^%s]+") do
     table.insert(str_args, arg)
 end
 
--- error if there are not at least 2 args
 if #str_args < 2 then
     print("Error: At least 2 arguments are required")
     return
@@ -38,15 +33,6 @@ end
 
 local min_tiles = tonumber(str_args[1])
 local max_tiles = tonumber(str_args[2])
-
-if #str_args > 2 then
-    if str_args[3] == "fast" then
-        fast = true
-    else
-        print("Error: Invalid argument: " .. str_args[3])
-        return
-    end
-end
 
 if not min_tiles or not max_tiles then
     print("Error: Both min_tiles and max_tiles must be numbers")
@@ -58,6 +44,17 @@ if min_tiles < 0 or max_tiles < 0 or min_tiles > max_tiles then
     print("Error: min_tiles and max_tiles must be non-negative and min_tiles <= max_tiles")
     return
 end
+
+local fast = false
+if #str_args > 2 then
+    if str_args[3] == "fast" then
+        fast = true
+    else
+        print("Error: Invalid argument: " .. str_args[3])
+        return
+    end
+end
+
 
 -- Helper function to get tiles remaining from game state
 function get_tiles_remaining()
@@ -147,5 +144,4 @@ local item = {
     tiles_remaining = tiles_remaining
 }
 
--- Output the result to console as JSON
 print(json.encode(item))

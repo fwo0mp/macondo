@@ -718,11 +718,14 @@ func (sc *ShellController) commitAIMove() error {
 		return errMacondoSolving
 	}
 
+	// set this to true synchronously so that the caller is guaranteed to observe it as true immediately
+	// XXX: this can be moved back into the go func once we allow callers to wait on a channel instead
+	// of spinning on this field
+	sc.botBusy = true
+
 	go func() {
 		log.Info().Msgf("Please wait, thinking for up to %v...", eliteBotShellTimeout)
-		sc.botCtx, sc.botCtxCancel = context.WithTimeout(context.Background(),
-			eliteBotShellTimeout)
-		sc.botBusy = true
+		sc.botCtx, sc.botCtxCancel = context.WithTimeout(context.Background(), eliteBotShellTimeout)
 		defer func() {
 			sc.botBusy = false
 		}()

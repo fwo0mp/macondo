@@ -196,7 +196,12 @@ func commitHastyMove(L *lua.LState) int {
 
 func commitAIMove(L *lua.LState) int {
 	sc := getShell(L)
-	sc.eliteplay(nil)
+	sc.commitAIMove()
+	// in script mode, async is more difficult, so this just blocks until the move is complete
+	// XXX replace this with a channel rather than spinning
+	for sc.solving() {
+		time.Sleep(1000 * time.Millisecond)
+	}
 	return 1
 }
 
