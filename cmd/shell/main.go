@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 
 	"github.com/domino14/macondo/config"
 	"github.com/domino14/macondo/shell"
@@ -31,23 +32,29 @@ const (
 var macondobanner string
 
 func main() {
-
-	// Determine the directory of the executable. We will use this
-	// directory to find the data files if an absolute path is not
-	// provided for these!
 	ex, err := os.Executable()
 	if err != nil {
 		panic(err)
 	}
 	exPath := filepath.Dir(ex)
-	fmt.Println(macondobanner)
-	fmt.Println(GitVersion)
-
-	log.Info().Msgf("executable path: %v", exPath)
-
 	cfg := &config.Config{}
 	args := os.Args[1:]
+
 	cfg.Load(args)
+
+	// Create a new FlagSet
+	fs := pflag.NewFlagSet("macondo", pflag.ContinueOnError)
+	fs.Bool(config.ConfigQuiet, false, "Suppress all output except for responses to user commands")
+
+	fs.Parse(args)
+	cfg.Viper.BindPFlags(fs)
+
+	if !cfg.GetBool(config.ConfigQuiet) {
+		fmt.Println(macondobanner)
+		fmt.Println(GitVersion)
+	}
+
+	log.Info().Msgf("executable path: %v", exPath)
 	log.Info().Msgf("Loaded config: %v", cfg.AllSettings())
 	cfg.AdjustRelativePaths(exPath)
 

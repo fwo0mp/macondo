@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domino14/word-golib/tilemapping"
-
+	"github.com/domino14/macondo/config"
 	pb "github.com/domino14/macondo/gen/api/proto/macondo"
+	"github.com/domino14/word-golib/tilemapping"
 	"github.com/rs/zerolog/log"
 )
 
@@ -51,6 +51,10 @@ func addText(lines []string, row int, hpad int, text string) {
 // ToDisplayText turns the current state of the game into a displayable
 // string.
 func (g *Game) ToDisplayText() string {
+	if g.config.GetBool(config.ConfigQuiet) {
+		return ""
+	}
+
 	bt := g.Board().ToDisplayText(g.alph)
 	// We need to insert rack, player, bag strings into the above string.
 	bts := strings.Split(bt, "\n")

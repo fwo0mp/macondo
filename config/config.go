@@ -55,6 +55,7 @@ func DefaultConfig() *Config {
 	c.SetDefault(ConfigDefaultBoardLayout, "CrosswordGame")
 	// Read from an env var MACONDO_DATA_PATH. This might not be a good way to do it:
 	c.SetDefault(ConfigDataPath, c.GetString(ConfigDataPath))
+	c.SetDefault(ConfigQuiet, false)
 
 	return c
 }
